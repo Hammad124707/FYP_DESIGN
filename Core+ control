@@ -1,10 +1,16 @@
 import random
 Read_Request = random.randint(0,0b1111111)
-Write_Data = 
+Write_Data = random.randint(0,0xffffffff)
 
 Read_Request_Address =  Read_Request & (0b0111111)
 print(bin(Read_Request_Address))
 Read_Request_Control = Read_Request >> 6 
 print(Read_Request_Control)
+
+
+if(Read_Request_Control) :
+    print(f"this is the Write Request and the data to be written is \n {hex(Write_Data)}")
+else :
+    print(" this was the read request")
 
 
