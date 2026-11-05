@@ -1,0 +1,10 @@
+import random
+Read_Request = random.randint(0,0b1111111)
+Write_Data = 
+
+Read_Request_Address =  Read_Request & (0b0111111)
+print(bin(Read_Request_Address))
+Read_Request_Control = Read_Request >> 6 
+print(Read_Request_Control)
+
+
