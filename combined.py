@@ -77,14 +77,16 @@ print(Read_Request_Control)
 Read_Data = 0
 
 if(Read_Request_Control) :
-    print(f"this is the Write Request and the data to be written is \n {hex(Write_Data)}")
+    print(f"this is the Write Request and the data to be written is \n {(Write_Data)}")
+    Ram[Read_Request_Address] = Write_Data
 else :
     print(" this was the read request")
     Read_Data = Ram[Read_Request_Address]
+    print(f"the R_DATA is 0x{Read_Data:08X}")
 
 
 
-print(f"the R_DATA is 0x{Read_Data:08X}")
+print(f"{Ram} \n")
 
 
 
