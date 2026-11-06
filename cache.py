@@ -51,13 +51,31 @@ def save_cache_csv(cache):
         for addr, val in cache.items():
             writer.writerow([f"0b{addr:06b}", f"0x{val:08X}"])
 
+class Cache_Block: 
+    def __init__ (self):
+        self.address = None
+        self.order = 0
+        self.state = "I"
+        self.data = 0 
+
+    def show(self):
+        print(f"Address : {self.address:06b}")
+        print(f"Data    : {self.data:08X}")
+        print(f"State   : {self.state}")
+        print(f"Order   : {self.order}")
+
+Cache = {
+    0: Cache_Block(),
+    1: Cache_Block(),
+    2: Cache_Block(),
+    3: Cache_Block()}
 
 
 #core
 Control = random.randint(0,1) # 1 bit control signal
 Address = random.randint(0,0b111111) # 6 bits address
 
-print(f"ADDRESS : bin({Address:07b}) , Control = {Control} ")
+print(f"ADDRESS : bin({Address:06b}) , Control = {Control} ")
 
 if(Control):
     Write_Data = random.randint(0,0xFFFFFFFF) # on write instruction when data is written to memory from the core
@@ -69,6 +87,8 @@ if(Control):
 
 Cache = load_cache_csv()
 Read_Data = 0
+
+
 def Write_Cache(Address, Write_Data):
 
     Cache[Address]= Write_Data
@@ -79,8 +99,13 @@ def Read_Cache(Address):
     print("this is a read cache hit")
 
 def Cache_Write_Miss(Address,Write_Data):
-    Ram[Address] = Write_Data
     print(f"this is a write cache miss")
+    Cache[Address] = Ram[Address]
+    print("we have Ram's data in cache right now, now we will write the data to Cache")
+    Cache[Address] = Write_Data
+    print(f"we are writing the data to RAM as well")
+   
+    Ram[Address] = Write_Data
 
 def Cache_Read_Miss(Address):
     Read_Data = Ram[Address]
@@ -112,8 +137,7 @@ else:
 
 save_ram_csv(Ram)
 
-for k,v in Cache.items():
-    print(f"{k:07b}: {v:08x}")
+
 
 save_cache_csv(Cache)
 
