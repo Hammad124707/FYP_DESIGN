@@ -125,21 +125,32 @@ def get_slot_for_miss():
     for slot, block in Cache.items():
         if block.state == "I" or block.address is None:
             return slot
-    return 0  
+    return min(Cache)
 
 
 def Write_Cache(slot, Write_Data):
     Cache[slot].data = Write_Data
     Cache[slot].state = "M"
     print("this is a write cache hit")
-    Cache[slot].order = powder
+    
 
 
 def Read_Cache(slot):
     global Read_Data
     Read_Data = Cache[slot].data
     print("this is a read cache hit")
-    Cache[slot].order = powder
+
+def min(Cache_dict):
+    min = 100000
+    for slot in Cache_dict.keys():
+        if Cache_dict[slot].order<min:
+            min = Cache_dict[slot].order
+            slt = slot
+
+    return slt
+        
+
+        
 
 
 def Cache_Write_Miss(Address, Write_Data):
@@ -196,19 +207,17 @@ for i in range(10):
             Cache_Write_Miss(Address, Write_Data)
         else:
             Cache_Read_Miss(Address)
+        powder = powder + 1
     print(i, "th iteration")
 
     for k,v in Cache.items():
         print(f"Slot {k}: Address={v.address}, Data={v.data}, State={v.state}, Order={v.order}")
 
 
-    time.sleep(8)
+    time.sleep(3)
     print("Now we will save the cache into cache.csv file")
     time.sleep(1)
-    if(powder == 3):
-         powder = 0 
-    else :
-        powder = powder + 1
+    
     save_cache_csv(Cache)
     
 
