@@ -7,8 +7,14 @@ class Core :
         self.write_data = None
         self.return_read_data = None
         self.return_write_validation = None 
-        self.permission = 1
+        self.take_perm()
         
+    def take_perm(self):
+        self.permission = int(input("perission given ?"))
+        # this permission is very important, if the core doesnt get a permission it cant ask for the data
+        #in only 1 scenario it wont get permission, if there is already a request being processed by the 
+        # same core core 1 cant get permission, if it already has a request in the buffer
+
 
     def generate_request(self):
         if(self.permission):
@@ -43,8 +49,11 @@ class Core :
 
 c1 = Core(0)
 
+
 c1.generate_request()
 c1.generate_write_data()
 c1.process_request()
+
+
 
             
