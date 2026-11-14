@@ -5,7 +5,7 @@ import time
 File_Name = "memory.csv"
 CACHE_FILE = "cache.csv" 
 eviction_log = []
-powder = 0
+powder = -1
 
 def load_ram_csv():
     ram = {}
@@ -38,6 +38,7 @@ Ram = load_ram_csv()
 
 
 def load_cache_csv(cache):
+    global powder
 
     if not os.path.exists(CACHE_FILE):
         return cache.cache_dict
@@ -65,6 +66,12 @@ def load_cache_csv(cache):
 
             block.state = row["State"]
             block.order = int(row["Order"])
+            if (block.order > powder) :
+                powder = block.order
+
+
+    powder = powder + 1 
+
 
     return cache.cache_dict
 
@@ -78,7 +85,7 @@ def save_cache_csv(cache_dict):
 
         for slot, block in cache_dict.items():
 
-            addr_str = 
+            addr_str = (
                 f"0b{block.address:06b}"
                 if isinstance(block.address, int)
                 else "None"
@@ -278,8 +285,8 @@ class Cache:
                 slt = slot
 
         
-        Eviction_Data = Cache[slot].data
-        Eviction_Address = Cache[slot].address
+        Eviction_Data = self.cache_dict[slt].data
+        Eviction_Address = self.cache_dict[slt].address
         return slt
 
     def write_back(self,data,address,event):
@@ -329,19 +336,31 @@ class Cache:
   
    
 
-#writeback method is missing
+
+
+# pre execution phase
 
 
 
 
 c0 = Core(0)
 cache0 = Cache(0)
+load_cache_csv(cache0)
+print(" before execution is is how the cache looks like \n")
+print("")
+
+for k, v in cache0.cache_dict.items():
+
+        addr_str = f"{v.address:06b}" if isinstance(v.address, int) else "None"
+        data_str = f"0x{v.data:08X}" if isinstance(v.data, int) else "None"
+
+        print(f"Slot {k}: Address={addr_str}, Data={data_str}, State={v.state}, Order={v.order}")
 
 
 
 
 
-# EXECUTION
+# EXECUTION phase
 for i in range(3):
     Request = c0.generate_request()
     Write_Data = c0.generate_write_data()
@@ -372,6 +391,9 @@ for i in range(3):
 
     print(i, "th iteration")
 
+
+
+# post execution phase
     for k, v in cache0.cache_dict.items():
 
         addr_str = f"{v.address:06b}" if isinstance(v.address, int) else "None"
