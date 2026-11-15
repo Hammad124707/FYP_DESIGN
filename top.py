@@ -136,6 +136,41 @@ def log_cache_event(address, data, state):
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 class Cache_Block:
 
     def __init__(self):
@@ -160,12 +195,17 @@ class Core :
         self.return_read_data = None
         self.return_write_validation = None 
         self.permission = 1
+        self.flag = None # this flag will check what to expect in axi
+        #stream return. Expect data or expect wrtie validation
         
     def generate_request(self):
         if(self.permission):
-            self.request = random.randint(0, 0b11111111)
-            #2 bits of what to do 
+             
+            self.request = random.randint(0, 0b1111111)
+            #1 bits of what to do 
             #6 bits of the address
+            self.return_read_data = None
+            self.return_write_validation = None
             return self.request
 
     def generate_write_data(self):
@@ -179,25 +219,46 @@ class Core :
         print("The core Has a new Request \n we are now about to process a new request")
         print("  ")
         print(" ")
-        request_address = self.request & (0b00111111)
+        request_address = self.request & (0b0111111)
         print(f"this is the requested address bin({request_address:06b})")
         request_control = self.request >> 6
-        print(f"{request_control:02b} these are the control bits")
+        print(f"{request_control:01b} these are the control bits")
 
         if  not(request_control):
+            self.flag = 0 # expect write validation
             print(f"this is the Write Request and the data to be written is \n hex {self.write_data:08x}")
         else:
-            print(" this is another request") 
-        self.permission = 1 
+            self.flag = 1 #expect read validation
+            print(" this is a read request") 
         print(" the request will now go out of core to the Cache")
         print(" ")
 
     def cache_to_core(self):
-        if self.return_read_data :
-            print(f"Core has recieved the data and the data is {self.return_read_data}")
-        elif(self.return_write_validation):
-            print("we have successfully written the data to the Ram")
 
+        if self.flag == 0:
+
+            if self.return_write_validation is None:
+                print("Core is waiting for write validation")
+
+            elif self.return_write_validation == 1:
+                print("Core: Write transaction completed successfully")
+                self.permission = 1 
+
+            else:
+                print("Core: Write validation not successful")
+                self.permission = 1
+
+        else :
+
+            if self.return_read_data is None:
+                print("Core is waiting for read data")
+               
+                
+
+            else:
+                print(f"Core has received the data: {self.return_read_data}, End the transaction")
+                self.permission = 1
+   
 
 
 class Cache:
@@ -236,10 +297,12 @@ class Cache:
         self.cache_dict[slot].data = Write_Data
         self.cache_dict[slot].state = "M"
         print("This is a write cache hit")
+        return 1
 
     def Read_Cache(self, slot):
         Read_Data = self.cache_dict[slot].data
         print("This is a read cache hit")
+      
         return Read_Data
 
     def min(self):
@@ -257,9 +320,13 @@ class Cache:
     def write_back(self,data,address,event):
         print(f"we are writing back the data to RAM")
         Ram[address] = data
-        "eviction done"
+        print("eviction done")
         log_cache_event(address,data,event)
 #check the difference between yours and gpt
+
+
+    def
+
     def Cache_Write_Miss(self, Address, Write_Data):
 
 
@@ -285,6 +352,7 @@ class Cache:
         #print("We are writing the data to RAM as well")
 
         Cache[slot].order = powder
+        return 1  
     # Ram[Address] = Write_Data (we are not evicting now)
     def Cache_Read_Miss(self,Address):
         global Read_Data
@@ -298,8 +366,57 @@ class Cache:
         Cache[slot].data = Read_Data
         Cache[slot].state = "E"
         Cache[slot].order = powder
+        return Read_Data
   
-   
+    def process_request(self, core):
+
+        global powder
+
+        # 1. Get request information
+        Control = self.request >> 6
+        Address = self.request & 0b0111111
+
+        print(f"Cache is processing address: {Address:06b}")
+
+        # 2. Check whether address exists in cache
+        hit_slot = self.find_cache_slot(Address)
+
+        # 3. Process cache hit
+        if hit_slot is not None:
+
+            print("CACHE HIT")
+
+            if Control == 0:
+                # Write request
+                core.return_write_validation = self.Write_Cache(
+                    hit_slot, self.write_data
+                )
+
+            else:
+                # Read request
+                core.return_read_data = self.Read_Cache(hit_slot)
+
+            self.cache_dict[hit_slot].order = powder
+
+        # 4. Process cache miss
+        else:
+
+            print("CACHE MISS")
+
+            if Control == 0:
+                # Write request
+                core.return_write_validation = self.Cache_Write_Miss(
+                    Address, self.write_data
+                )
+
+            else:
+                # Read request
+                core.return_read_data = self.Cache_Read_Miss(Address)
+
+        # 5. Update replacement counter
+        powder += 1
+
+        print("Cache has completed processing the request")
 
 
 
@@ -334,27 +451,12 @@ for i in range(3):
 
 
     cache0.recieve_request(Request,Write_Data)
-    Control = cache0.request >> 6 
-    Address  = cache0.request & 0b00111111
-    hit_slot = cache0.find_cache_slot(Address)
+    print("Request:", cache0.request)
+    cache0.process_request(c0)
 
-    if hit_slot is not None:
-        print("this is a cache hit")
+   
+    c0.cache_to_core()
 
-        if not(Control):
-            cache0.Write_Cache(hit_slot, Write_Data)
-        else:
-            cache0.Read_Cache(hit_slot)
-
-    else:
-        if not(Control):
-            cache0.Cache_Write_Miss(Address, Write_Data)
-        else:
-            cache0.Cache_Read_Miss(Address)
-
-        powder = powder + 1
-
-    print(i, "th iteration")
 
 
 
