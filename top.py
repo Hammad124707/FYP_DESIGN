@@ -7,6 +7,14 @@ CACHE_FILE = "cache.csv"
 eviction_log = []
 powder = -1
 
+
+"""  
+I = 0b00 | Control = 1 (this means we are writing) 
+S = 0b01 | Control = 0 (this means we are reading) 
+E = 0b10
+M = 0b11 
+
+"""
 def load_ram_csv():
     ram = {}
 
@@ -135,48 +143,12 @@ def log_cache_event(address, data, state):
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 class Cache_Block:
 
     def __init__(self):
         self.address = None
         self.order = 0
-        self.state = "I"
+        self.state = 0b00
         self.data = 0
 
     def show(self):
@@ -192,11 +164,10 @@ class Core :
         self.core_id = core_id
         self.request = None
         self.write_data = None
-        self.return_read_data = None
-        self.return_write_validation = None 
-        self.permission = 1
-        self.flag = None # this flag will check what to expect in axi
-        #stream return. Expect data or expect wrtie validation
+        self.return_read_data = None  #what will we get on the CCD line
+        self.return_write_validation = None  #what will we get on the ccd line
+        self.permission = 1 # permission will be given if the data has been received through the ccd line (data of the previous request)
+        self.flag = None # this flag will check what to expect in axi stream return. Expect data or expect write validation
         
     def generate_request(self):
         if(self.permission):
@@ -204,8 +175,6 @@ class Core :
             self.request = random.randint(0, 0b1111111)
             #1 bits of what to do 
             #6 bits of the address
-            self.return_read_data = None
-            self.return_write_validation = None
             return self.request
 
     def generate_write_data(self):
@@ -215,7 +184,7 @@ class Core :
  
     def process_request(self):
         time.sleep(3)
-        self.permission = 0 
+        
         print("The core Has a new Request \n we are now about to process a new request")
         print("  ")
         print(" ")
@@ -231,22 +200,22 @@ class Core :
             self.flag = 1 #expect read validation
             print(" this is a read request") 
         print(" the request will now go out of core to the Cache")
+        self.permission = 0
         print(" ")
 
-    def cache_to_core(self):
+    def cache_to_core(self): #update the name of cachetocore to ccd
 
         if self.flag == 0:
 
             if self.return_write_validation is None:
                 print("Core is waiting for write validation")
 
-            elif self.return_write_validation == 1:
+            else : 
+                self.return_write_validation == 1:
                 print("Core: Write transaction completed successfully")
                 self.permission = 1 
 
-            else:
-                print("Core: Write validation not successful")
-                self.permission = 1
+            
 
         else :
 
@@ -267,12 +236,15 @@ class Cache:
         self.cache_id = cache_id
        
 
-        self.flag = 0b0 # 1 bit
+        self.flag = 0b0 # 1 bit #1 means cache is expecting a reply , 0 means cache is expecting a snoop
         self.state = 0b0 # 8 bits
+    
+        self.ht = 0b0 #1 means hub is waiting
+        self.gc = 0b0 
 
         self.cache_dict = {
             i: Cache_Block() for i in range(4)
-        } # 4 cache lines
+        } # 4 cache blocks being instansiated
 
     def recieve_request(self,request,write_data):
         time.sleep(3)
@@ -280,26 +252,28 @@ class Cache:
         self.request = request 
         self.write_data = write_data
 
-    def find_cache_slot(self, addr):
+    def find_cache_slot(self, addr):  
         for slot, block in self.cache_dict.items():
             if block.address == addr and block.state != "I":
                 return slot
         return None
 
-    def get_slot_for_miss(self):
+    def get_slot_for_miss(self): #this is for finding the empty block (from the 4 blocks) so we can process a miss request
         for slot, block in self.cache_dict.items():
-            if block.state == "I" or block.address is None:
-                return slot
+            if block.state == "I" or block.address is None: 
+                return slot # block found 
 
-        return self.min()
+        return self.min() # block not found , evict something
 
     def Write_Cache(self, slot, Write_Data):
+        self.rt = 1
         self.cache_dict[slot].data = Write_Data
         self.cache_dict[slot].state = "M"
         print("This is a write cache hit")
         return 1
 
     def Read_Cache(self, slot):
+        self.rt = 1
         Read_Data = self.cache_dict[slot].data
         print("This is a read cache hit")
       
@@ -317,15 +291,13 @@ class Cache:
         Eviction_Address = self.cache_dict[slt].address
         return slt
 
-    def write_back(self,data,address,event):
+    def write_back(self,data,address,event): # AXI REQ, this needs a change aswell
         print(f"we are writing back the data to RAM")
         Ram[address] = data
         print("eviction done")
         log_cache_event(address,data,event)
-#check the difference between yours and gpt
 
-
-    def
+    
 
     def Cache_Write_Miss(self, Address, Write_Data):
 
@@ -360,6 +332,7 @@ class Cache:
         slot = self.get_slot_for_miss()
         if Cache[slot].address is not None:
             self.write_back(Cache[slot].data, Cache[slot].address, Cache[slot].state)
+            
         Read_Data = Ram[Address]
         print(f"this is a read cache miss")
         Cache[slot].address = Address
@@ -367,6 +340,26 @@ class Cache:
         Cache[slot].state = "E"
         Cache[slot].order = powder
         return Read_Data
+
+    def check_golden_case(self,request):
+         Control = self.request >> 6
+         Address = self.request & 0b0111111
+         for slot , block in self.cache_dict.items():
+            if(Control) :
+                if(block.address == Address and (block.state != 0b00 or block.state != 0b01 ))h:
+                    print("this is a golden case")
+                    self.gc = 1
+            else :
+                if(block.address == Address and block.state != 0b00) :
+                    print("this is a golden case")
+                    self.gc = 1
+
+                 
+        
+
+        
+
+
   
     def process_request(self, core):
 
@@ -376,7 +369,14 @@ class Cache:
         Control = self.request >> 6
         Address = self.request & 0b0111111
 
+        while (self.ht == 1) :
+            print("we are waiting for the hub to finish the snoop")
+
+    
+
+
         print(f"Cache is processing address: {Address:06b}")
+        self.check_golden_case(self.request)
 
         # 2. Check whether address exists in cache
         hit_slot = self.find_cache_slot(Address)
@@ -390,6 +390,7 @@ class Cache:
                 # Write request
                 core.return_write_validation = self.Write_Cache(
                     hit_slot, self.write_data
+                    
                 )
 
             else:
@@ -417,6 +418,8 @@ class Cache:
         powder += 1
 
         print("Cache has completed processing the request")
+
+
 
 
 
@@ -495,3 +498,365 @@ save_cache_csv(cache0.cache_dict)
 
 
 
+
+class Cache:
+
+    # Hub transaction opcodes
+    WRITE = 0b00
+    READ = 0b01
+    PUTM = 0b10
+    UPGRADE = 0b11
+
+    # MESI states
+    I = "I"
+    S = "S"
+    E = "E"
+    M = "M"
+
+    def __init__(self, cache_id):
+
+        self.cache_id = cache_id
+
+        # Four cache lines
+        self.cache_dict = {
+            i: Cache_Block() for i in range(4)
+        }
+
+        # Cache-to-Hub transaction flag
+        # Set only after Hub grants the request.
+        self.flag = 0
+
+        # Core request waiting inside the Cache
+        self.pending_core_request = None
+
+        # Request currently being sent to the Hub
+        self.pending_hub_request = None
+
+        # Response received from the Hub
+        self.hub_response = None
+
+        # Response that will be returned to the Core
+        self.core_response = None
+
+        self.hub_response = None
+
+        # FIFO counter
+        self.fifo_counter = 0
+
+    # --------------------------------------------------
+    # 1. RECEIVE REQUEST FROM CORE
+    # --------------------------------------------------
+
+
+    def prepare_hub_response(self, response_type, address, data=None):
+
+        self.hub_response = {
+            "cache_id": self.cache_id,
+            "address": address,
+            "response_type": response_type,
+            "data": data
+        }
+
+        return self.hub_response
+
+
+
+    def receive_core_request(self, control, address, write_data=None):
+
+        if self.pending_core_request is not None:
+            raise RuntimeError("Cache already has a pending Core request.")
+
+        if control not in (0, 1):
+            raise ValueError("Core control must be 0 or 1.")
+
+        if not 0 <= address < 64:
+            raise ValueError("Address must be a 6-bit value.")
+
+        self.pending_core_request = {
+            "control": control,
+            "address": address,
+            "write_data": write_data
+        }
+
+    # --------------------------------------------------
+    # 2. FIND A CACHE LINE
+    # --------------------------------------------------
+
+    def find_cache_slot(self, address):
+
+        for slot, block in self.cache_dict.items():
+
+            if block.address == address and block.state != self.I:
+                return slot
+
+        return None
+
+    # --------------------------------------------------
+    # 3. FIND AN EMPTY SLOT OR FIFO VICTIM
+    # --------------------------------------------------
+
+    def get_slot_for_miss(self):
+
+        # Prefer an invalid/empty slot
+        for slot, block in self.cache_dict.items():
+
+            if block.state == self.I:
+                return slot
+
+        # Otherwise, replace the oldest block
+        return min(
+            self.cache_dict,
+            key=lambda slot: self.cache_dict[slot].order
+        )
+
+    # --------------------------------------------------
+    # 4. DECIDE WHAT THE CORE REQUEST REQUIRES
+    # --------------------------------------------------
+
+    def process_core_request(self):
+
+        if self.pending_core_request is None:
+            return None
+
+        request = self.pending_core_request
+
+        control = request["control"]
+        address = request["address"]
+        write_data = request["write_data"]
+
+        slot = self.find_cache_slot(address)
+
+        # ---------------- READ ----------------
+
+        if control == 0:
+
+            # Read hit
+            if slot is not None:
+
+                block = self.cache_dict[slot]
+
+                self.core_response = {
+                    "type": "READ_COMPLETE",
+                    "data": block.data
+                }
+
+                self.pending_core_request = None
+                return self.core_response
+
+            # Read miss
+            return self.prepare_hub_request(
+                self.READ, address
+            )
+
+        # ---------------- WRITE ----------------
+
+        if control == 1:
+
+            # Write hit
+            if slot is not None:
+
+                block = self.cache_dict[slot]
+
+                # Already have exclusive modified ownership
+                if block.state == self.M:
+
+                    block.data = write_data
+
+                    self.core_response = {
+                        "type": "WRITE_COMPLETE"
+                    }
+
+                    self.pending_core_request = None
+                    return self.core_response
+
+                # Shared copy needs an Upgrade
+                if block.state == self.S:
+
+                    return self.prepare_hub_request(
+                        self.UPGRADE, address
+                    )
+
+                # Exclusive copy can be modified locally.
+                # E -> M is the standard MESI transition.
+                if block.state == self.E:
+
+                    block.state = self.M
+                    block.data = write_data
+
+                    self.core_response = {
+                        "type": "WRITE_COMPLETE"
+                    }
+
+                    self.pending_core_request = None
+                    return self.core_response
+
+            # Write miss
+            return self.prepare_hub_request(
+                self.WRITE, address
+            )
+
+    # --------------------------------------------------
+    # 5. PREPARE A REQUEST FOR THE HUB
+    # --------------------------------------------------
+
+    def prepare_hub_request(self, opcode, address, data=None):
+
+        # First beat: 2-bit opcode + 6-bit address
+        first_beat = (opcode << 6) | address
+
+        beats = [first_beat]
+
+        # PutM has an additional 32-bit data beat
+        if opcode == self.PUTM:
+
+            if data is None:
+                raise ValueError("PutM requires 32-bit data.")
+
+            beats.append(data)
+
+        self.pending_hub_request = {
+            "opcode": opcode,
+            "address": address,
+            "beats": beats
+        }
+
+        return self.pending_hub_request
+
+    # --------------------------------------------------
+    # 6. HUB GRANTS THE REQUEST
+    # --------------------------------------------------
+
+    def hub_grant_received(self):
+
+        if self.pending_hub_request is None:
+            raise RuntimeError("No Hub request is waiting for a grant.")
+
+        self.flag = 1
+
+    # --------------------------------------------------
+    # 7. COMPLETE THE HUB TRANSACTION
+    # --------------------------------------------------
+
+    def complete_hub_transaction(self):
+
+        self.flag = 0
+        self.pending_hub_request = None
+        self.hub_response = None
+
+    # --------------------------------------------------
+    # 8. RECEIVE A SNOOP FROM THE HUB
+    # --------------------------------------------------
+
+    def handle_snoop(self, address, snoop_type):
+
+        slot = self.find_cache_slot(address)
+
+        # Cache does not have this line
+        if slot is None:
+
+            return {
+                "response": "NO_COPY",
+                "data": None
+            }
+
+        block = self.cache_dict[slot]
+
+        # ---------------- READ SNOOP ----------------
+
+        if snoop_type == "READ":
+
+            # Only E/M holders supply data
+            if block.state in (self.E, self.M):
+
+                data = block.data
+
+                # Dirty data must be written back by Hub
+                dirty = block.state == self.M
+
+                # Both copies become Shared
+                block.state = self.S
+
+                return {
+                    "response": "HAVE_COPY",
+                    "data": data,
+                    "dirty": dirty
+                }
+
+            # S means RAM is the owner
+            return {
+                "response": "NO_COPY",
+                "data": None
+            }
+
+        # ---------------- WRITE SNOOP ----------------
+
+        if snoop_type == "WRITE":
+
+            data = None
+            dirty = False
+
+            # Modified cache must provide its latest data
+            if block.state == self.M:
+
+                data = block.data
+                dirty = True
+
+            # Invalidate the line
+            self.cache_dict[slot] = Cache_Block()
+
+            return {
+                "response": "INVALIDATE_DONE",
+                "data": data,
+                "dirty": dirty
+            }
+
+        raise ValueError("Unknown snoop type.")
+
+    # --------------------------------------------------
+    # 9. INSTALL A LINE RECEIVED FROM THE HUB
+    # --------------------------------------------------
+
+    def install_block(self, address, data, state):
+
+        if state not in (self.S, self.E, self.M):
+            raise ValueError("Invalid state for an installed block.")
+
+        slot = self.get_slot_for_miss()
+
+        self.cache_dict[slot] = Cache_Block()
+
+        block = self.cache_dict[slot]
+
+        block.address = address
+        block.data = data
+        block.state = state
+
+        self.fifo_counter += 1
+        block.order = self.fifo_counter
+
+        return slot
+
+    # --------------------------------------------------
+    # 10. HANDLE PUTM EVICTION
+    # --------------------------------------------------
+
+    def prepare_putm(self, slot):
+
+        block = self.cache_dict[slot]
+
+        if block.state != self.M:
+            raise RuntimeError("PutM is only required for an M block.")
+
+        return self.prepare_hub_request(
+            self.PUTM,
+            block.address,
+            block.data
+        )
+
+    # --------------------------------------------------
+    # 11. CLEAR AN EVICTED BLOCK
+    # --------------------------------------------------
+
+    def evict_block(self, slot):
+
+        self.cache_dict[slot] = Cache_Block()
