@@ -144,8 +144,10 @@ def log_cache_event(address, data, state):
 
 class Hub: 
 
-    def __init__(self):
+    def __init__(self,cache):
         self.request_buffer =None 
+        self.return_block = None
+        self.cache = cache
     def recieve_request(self,control,address,data):
         self.control = control 
         self.address = address
@@ -159,6 +161,8 @@ class Hub:
             return 1
         elif(self.control == 0b11):
             print("this is a write request")
+            self.return_block =  self.cache.snoop_by_hub(0b1,self.address)
+
 
     
 
@@ -390,7 +394,18 @@ class Cache:
         
 
         
-
+    def snoop_by_hub (self,control,address):
+        for slot, block in self.cache_dict.items():
+            if(block.address == address):
+                print("The required block by the hub is in the cache")
+                if(control == 0):
+                    print("MC cache wants to read, make the state shared")
+                    block.state = 0b10
+                    return block.data
+                else:
+                    print("MC cache wants to write, make the state invalid")
+                    block.state = 0b00
+                    return block.data
 
   
     def process_request(self, core):
