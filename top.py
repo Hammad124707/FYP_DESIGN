@@ -9,10 +9,10 @@ powder = -1
 
 
 """  
-I = 0b00 | Control = 1 (this means we are writing) 
-S = 0b01 | Control = 0 (this means we are reading) 
-E = 0b10
-M = 0b11 
+I = 0b00 | Control = 1 (this means we are writing) | 00 = write req
+S = 0b01 | Control = 0 (this means we are reading) | 01 = Upgrade
+E = 0b10                                           | 10  = PutM
+M = 0b11                                           | 11 = read req
 
 """
 def load_ram_csv():
@@ -142,6 +142,25 @@ def log_cache_event(address, data, state):
         ])
 
 
+class Hub: 
+
+    def __init__(self):
+        self.request_buffer =None 
+    def recieve_request(self,control,address,data):
+        self.control = control 
+        self.address = address
+        self.data = data
+
+    def process_request(self):
+        if (self.control == 0b10):
+            print("this is a PutM request")
+            Ram[self.address] =  self.data
+            print(" the data has been installed in the Ram")
+            return 1
+        elif(self.control == 0b11):
+            print("this is a write request")
+
+    
 
 class Cache_Block:
 
@@ -232,8 +251,9 @@ class Core :
 
 class Cache:
 
-    def __init__(self, cache_id):
+    def __init__(self, cache_id,hub):
         self.cache_id = cache_id
+        self.hub = hub 
        
 
         self.flag = 0b0 # 1 bit #1 means cache is expecting a reply , 0 means cache is expecting a snoop
@@ -266,14 +286,15 @@ class Cache:
         return self.min() # block not found , evict something
 
     def Write_Cache(self, slot, Write_Data):
-        self.rt = 1
+        
         self.cache_dict[slot].data = Write_Data
         self.cache_dict[slot].state = "M"
         print("This is a write cache hit")
-        return 1
+        return 1  #write validation sent to the core
+        
 
     def Read_Cache(self, slot):
-        self.rt = 1
+        
         Read_Data = self.cache_dict[slot].data
         print("This is a read cache hit")
       
@@ -292,59 +313,70 @@ class Cache:
         return slt
 
     def write_back(self,data,address,event): # AXI REQ, this needs a change aswell
-        print(f"we are writing back the data to RAM")
-        Ram[address] = data
+        print(f"we are giving hub the block so it will write back")
+        self.hub.recieve_request(0b10,address,data) # our PutM request
+        self.hub.process_request()
         print("eviction done")
         log_cache_event(address,data,event)
 
     
-
     def Cache_Write_Miss(self, Address, Write_Data):
+    
+    
+            Cache = self.cache_dict
+    
+            print("this is a write cache miss")
+    
+            slot = self.get_slot_for_miss()
+            if Cache[slot].address is not None:
+                result = self.write_back(Cache[slot].data, Cache[slot].address, Cache[slot].state)
+
+            # now that we have space we will give hub our Write request, means we will ask hub to find the block for us 
+
+            self.hub.recieve_request(0b00,Address,Write_Data)
+            self.hub.process_request()
+            """
+            Cache[slot].address = Address
+            Cache[slot].data = Ram[Address]
+            Cache[slot].state = "M"
+    
+            print(
+                "We have Ram's data in cache right now, now we will write to that datA"
+            )
+    
+            Cache[slot].data = Write_Data
+    
+            #print("We are writing the data to RAM as well")
+    
+            Cache[slot].order = powder
+            return 1  
+        # Ram[Address] = Write_Data (we are not evicting now)
+        def Cache_Read_Miss(self,Address):
+            global Read_Data
+            Cache = self.cache_dict
+            slot = self.get_slot_for_miss()
+            if Cache[slot].address is not None:
+                self.write_back(Cache[slot].data, Cache[slot].address, Cache[slot].state)
+                
+            Read_Data = Ram[Address]
+            print(f"this is a read cache miss")
+            Cache[slot].address = Address
+            Cache[slot].data = Read_Data
+            Cache[slot].state = "E"
+            Cache[slot].order = powder
+            return Read_Data
+    
+            """
 
 
-        Cache = self.cache_dict
 
-        print("this is a write cache miss")
 
-        slot = self.get_slot_for_miss()
-        if Cache[slot].address is not None:
-            self.write_back(Cache[slot].data, Cache[slot].address, Cache[slot].state)
-       
-
-        Cache[slot].address = Address
-        Cache[slot].data = Ram[Address]
-        Cache[slot].state = "M"
-
-        print(
-            "We have Ram's data in cache right now, now we will write to that datA"
-        )
-
-        Cache[slot].data = Write_Data
-
-        #print("We are writing the data to RAM as well")
-
-        Cache[slot].order = powder
-        return 1  
-    # Ram[Address] = Write_Data (we are not evicting now)
-    def Cache_Read_Miss(self,Address):
-        global Read_Data
-        Cache = self.cache_dict
-        slot = self.get_slot_for_miss()
-        if Cache[slot].address is not None:
-            self.write_back(Cache[slot].data, Cache[slot].address, Cache[slot].state)
-            
-        Read_Data = Ram[Address]
-        print(f"this is a read cache miss")
-        Cache[slot].address = Address
-        Cache[slot].data = Read_Data
-        Cache[slot].state = "E"
-        Cache[slot].order = powder
-        return Read_Data
+    
 
     def check_golden_case(self,request):
-         Control = self.request >> 6
-         Address = self.request & 0b0111111
-         for slot , block in self.cache_dict.items():
+        Control = self.request >> 6
+        Address = self.request & 0b0111111
+        for slot , block in self.cache_dict.items():
             if(Control) :
                 if(block.address == Address and (block.state != 0b00 or block.state != 0b01 ))h:
                     print("this is a golden case")
@@ -375,7 +407,7 @@ class Cache:
     
 
 
-        print(f"Cache is processing address: {Address:06b}")
+        print(f"Cache is processing address: {Address:06b}") #next optimisation would be to complete the whole request rather than just making gc =1 
         self.check_golden_case(self.request)
 
         # 2. Check whether address exists in cache
@@ -398,26 +430,13 @@ class Cache:
                 core.return_read_data = self.Read_Cache(hit_slot)
 
             self.cache_dict[hit_slot].order = powder
+            return 1
 
         # 4. Process cache miss
         else:
+            return 0 
 
-            print("CACHE MISS")
-
-            if Control == 0:
-                # Write request
-                core.return_write_validation = self.Cache_Write_Miss(
-                    Address, self.write_data
-                )
-
-            else:
-                # Read request
-                core.return_read_data = self.Cache_Read_Miss(Address)
-
-        # 5. Update replacement counter
-        powder += 1
-
-        print("Cache has completed processing the request")
+           
 
 
 
@@ -429,7 +448,8 @@ class Cache:
 
 
 c0 = Core(0)
-cache0 = Cache(0)
+hub = Hub()
+cache0 = Cache(0,hub)
 load_cache_csv(cache0)
 print(" before execution is is how the cache looks like \n")
 print("")
@@ -455,7 +475,10 @@ for i in range(3):
 
     cache0.recieve_request(Request,Write_Data)
     print("Request:", cache0.request)
-    cache0.process_request(c0)
+
+    if cache0.process_request(c0) != 1 :
+        print("we have a cache miss")
+
 
    
     c0.cache_to_core()
